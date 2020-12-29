@@ -687,6 +687,31 @@ class BaseExceptionReportingTests:
         msg = self.get_report(e).splitlines()
         self.assertEqual(msg[-2], '               ^')
 
+    def test_syntax_error_no_lineno(self):
+        # See #34463.
+
+        # Without filename
+        e = SyntaxError('bad syntax')
+        msg = self.get_report(e).splitlines()
+        self.assertEqual(msg,
+            ['SyntaxError: bad syntax'])
+        e.lineno = 100
+        msg = self.get_report(e).splitlines()
+        self.assertEqual(msg,
+            ['  File "<string>", line 100', 'SyntaxError: bad syntax'])
+
+        # With filename
+        e = SyntaxError('bad syntax')
+        e.filename = 'myfile.py'
+
+        msg = self.get_report(e).splitlines()
+        self.assertEqual(msg,
+            ['SyntaxError: bad syntax (myfile.py)'])
+        e.lineno = 100
+        msg = self.get_report(e).splitlines()
+        self.assertEqual(msg,
+            ['  File "myfile.py", line 100', 'SyntaxError: bad syntax'])
+
     def test_message_none(self):
         # A message that looks like "None" should not be treated specially
         err = self.get_report(Exception(None))
@@ -1123,6 +1148,18 @@ class TestTracebackException(unittest.TestCase):
         self.assertEqual(exc_info[0], exc.exc_type)
         self.assertEqual(str(exc_info[1]), str(exc))
 
+    def test_no_refs_to_exception_and_traceback_objects(self):
+        try:
+            1/0
+        except Exception:
+            exc_info = sys.exc_info()
+
+        refcnt1 = sys.getrefcount(exc_info[1])
+        refcnt2 = sys.getrefcount(exc_info[2])
+        exc = traceback.TracebackException(*exc_info)
+        self.assertEqual(sys.getrefcount(exc_info[1]), refcnt1)
+        self.assertEqual(sys.getrefcount(exc_info[2]), refcnt2)
+
     def test_comparison_basic(self):
         try:
             1/0
@@ -1171,6 +1208,16 @@ class TestTracebackException(unittest.TestCase):
         exc6 = traceback.TracebackException(*exc_info, limit=-2)
         exc7 = traceback.TracebackException(*exc_info, limit=-2, capture_locals=True)
         self.assertNotEqual(exc6, exc7)
+
+    def test_comparison_equivalent_exceptions_are_equal(self):
+        excs = []
+        for _ in range(2):
+            try:
+                1/0
+            except:
+                excs.append(traceback.TracebackException(*sys.exc_info()))
+        self.assertEqual(excs[0], excs[1])
+        self.assertEqual(list(excs[0].format()), list(excs[1].format()))
 
     def test_unhashable(self):
         class UnhashableException(Exception):
