@@ -34,23 +34,14 @@ struct _frame {
     PyObject *f_locals;         /* local symbol table (any mapping) */
     PyObject **f_valuestack;    /* points after the last local */
     PyObject *f_trace;          /* Trace function */
-    int f_stackdepth;           /* Depth of value stack */
-    char f_trace_lines;         /* Emit per-line trace events? */
-    char f_trace_opcodes;       /* Emit per-opcode trace events? */
-
     /* Borrowed reference to a generator, or NULL */
     PyObject *f_gen;
-
+    int f_stackdepth;           /* Depth of value stack */
     int f_lasti;                /* Last instruction if called */
-    /* Call PyFrame_GetLineNumber() instead of reading this field
-       directly.  As of 2.3 f_lineno is only valid when tracing is
-       active (i.e. when f_trace is set).  At other times we use
-       PyCode_Addr2Line to calculate the line from the current
-       bytecode index. */
-    int f_lineno;               /* Current line number */
-    int f_iblock;               /* index in f_blockstack */
+    int f_lineno;               /* Current line number. Only valid if non-zero */
     PyFrameState f_state;       /* What state the frame is in */
-    PyTryBlock f_blockstack[CO_MAXBLOCKS]; /* for try and loop blocks */
+    char f_trace_lines;         /* Emit per-line trace events? */
+    char f_trace_opcodes;       /* Emit per-opcode trace events? */
     PyObject *f_localsplus[1];  /* locals+stack, dynamically sized */
 };
 
@@ -76,16 +67,11 @@ PyAPI_FUNC(PyFrameObject *) PyFrame_New(PyThreadState *, PyCodeObject *,
                                         PyObject *, PyObject *);
 
 /* only internal use */
-PyFrameObject* _PyFrame_New_NoTrack(PyThreadState *, PyCodeObject *,
-                                    PyObject *, PyObject *);
+PyFrameObject*
+_PyFrame_New_NoTrack(PyThreadState *, PyFrameConstructor *, PyObject *);
 
 
 /* The rest of the interface is specific for frame objects */
-
-/* Block management functions */
-
-PyAPI_FUNC(void) PyFrame_BlockSetup(PyFrameObject *, int, int, int);
-PyAPI_FUNC(PyTryBlock *) PyFrame_BlockPop(PyFrameObject *);
 
 /* Conversions between "fast locals" and locals in dictionary */
 

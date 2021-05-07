@@ -23,12 +23,14 @@ Type Objects
 
    Return non-zero if the object *o* is a type object, including instances of
    types derived from the standard type object.  Return 0 in all other cases.
+   This function always succeeds.
 
 
 .. c:function:: int PyType_CheckExact(PyObject *o)
 
-   Return non-zero if the object *o* is a type object, but not a subtype of the
-   standard type object.  Return 0 in all other cases.
+   Return non-zero if the object *o* is a type object, but not a subtype of
+   the standard type object.  Return 0 in all other cases.  This function
+   always succeeds.
 
 
 .. c:function:: unsigned int PyType_ClearCache()
@@ -109,7 +111,7 @@ Type Objects
 
    .. versionchanged:: 3.10
       :c:func:`PyType_GetSlot` can now accept all types.
-      Previously, it was limited to heap types.
+      Previously, it was limited to :ref:`heap types <heap-types>`.
 
 .. c:function:: PyObject* PyType_GetModule(PyTypeObject *type)
 
@@ -151,7 +153,7 @@ The following functions and structs are used to create
 
 .. c:function:: PyObject* PyType_FromModuleAndSpec(PyObject *module, PyType_Spec *spec, PyObject *bases)
 
-   Creates and returns a heap type object from the *spec*
+   Creates and returns a :ref:`heap type <heap-types>` from the *spec*
    (:const:`Py_TPFLAGS_HEAPTYPE`).
 
    The *bases* argument can be used to specify base classes; it can either

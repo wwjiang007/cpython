@@ -224,7 +224,7 @@ class SocketCANTest(unittest.TestCase):
     the following commands:
     # modprobe vcan
     # ip link add dev vcan0 type vcan
-    # ifconfig vcan0 up
+    # ip link set up vcan0
     """
     interface = 'vcan0'
     bufsize = 128
@@ -1121,9 +1121,11 @@ class GeneralModuleTests(unittest.TestCase):
         s_good_values = [0, 1, 2, 0xffff]
         l_good_values = s_good_values + [0xffffffff]
         l_bad_values = [-1, -2, 1<<32, 1<<1000]
-        s_bad_values = l_bad_values + [_testcapi.INT_MIN - 1,
-                                       _testcapi.INT_MAX + 1]
-        s_deprecated_values = [1<<16, _testcapi.INT_MAX]
+        s_bad_values = (
+            l_bad_values +
+            [_testcapi.INT_MIN-1, _testcapi.INT_MAX+1] +
+            [1 << 16, _testcapi.INT_MAX]
+        )
         for k in s_good_values:
             socket.ntohs(k)
             socket.htons(k)
@@ -1136,9 +1138,6 @@ class GeneralModuleTests(unittest.TestCase):
         for k in l_bad_values:
             self.assertRaises(OverflowError, socket.ntohl, k)
             self.assertRaises(OverflowError, socket.htonl, k)
-        for k in s_deprecated_values:
-            self.assertWarns(DeprecationWarning, socket.ntohs, k)
-            self.assertWarns(DeprecationWarning, socket.htons, k)
 
     def testGetServBy(self):
         eq = self.assertEqual
@@ -1519,9 +1518,9 @@ class GeneralModuleTests(unittest.TestCase):
         infos = socket.getaddrinfo(HOST, 80, socket.AF_INET, socket.SOCK_STREAM)
         for family, type, _, _, _ in infos:
             self.assertEqual(family, socket.AF_INET)
-            self.assertEqual(str(family), 'AddressFamily.AF_INET')
+            self.assertEqual(str(family), 'AF_INET')
             self.assertEqual(type, socket.SOCK_STREAM)
-            self.assertEqual(str(type), 'SocketKind.SOCK_STREAM')
+            self.assertEqual(str(type), 'SOCK_STREAM')
         infos = socket.getaddrinfo(HOST, None, 0, socket.SOCK_STREAM)
         for _, socktype, _, _, _ in infos:
             self.assertEqual(socktype, socket.SOCK_STREAM)
@@ -1679,7 +1678,8 @@ class GeneralModuleTests(unittest.TestCase):
         for mode in 'r', 'rb', 'rw', 'w', 'wb':
             with self.subTest(mode=mode):
                 with socket.socket() as sock:
-                    with sock.makefile(mode) as fp:
+                    encoding = None if "b" in mode else "utf-8"
+                    with sock.makefile(mode, encoding=encoding) as fp:
                         self.assertEqual(fp.mode, mode)
 
     def test_makefile_invalid_mode(self):
@@ -1794,8 +1794,8 @@ class GeneralModuleTests(unittest.TestCase):
         # Make sure that the AF_* and SOCK_* constants have enum-like string
         # reprs.
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-            self.assertEqual(str(s.family), 'AddressFamily.AF_INET')
-            self.assertEqual(str(s.type), 'SocketKind.SOCK_STREAM')
+            self.assertEqual(str(s.family), 'AF_INET')
+            self.assertEqual(str(s.type), 'SOCK_STREAM')
 
     def test_socket_consistent_sock_type(self):
         SOCK_NONBLOCK = getattr(socket, 'SOCK_NONBLOCK', 0)
@@ -1942,6 +1942,41 @@ class GeneralModuleTests(unittest.TestCase):
                     fileno=afile.fileno())
             self.assertEqual(cm.exception.errno, errno.ENOTSOCK)
 
+    def test_addressfamily_enum(self):
+        import _socket, enum
+        CheckedAddressFamily = enum._old_convert_(
+                enum.IntEnum, 'AddressFamily', 'socket',
+                lambda C: C.isupper() and C.startswith('AF_'),
+                source=_socket,
+                )
+        enum._test_simple_enum(CheckedAddressFamily, socket.AddressFamily)
+
+    def test_socketkind_enum(self):
+        import _socket, enum
+        CheckedSocketKind = enum._old_convert_(
+                enum.IntEnum, 'SocketKind', 'socket',
+                lambda C: C.isupper() and C.startswith('SOCK_'),
+                source=_socket,
+                )
+        enum._test_simple_enum(CheckedSocketKind, socket.SocketKind)
+
+    def test_msgflag_enum(self):
+        import _socket, enum
+        CheckedMsgFlag = enum._old_convert_(
+                enum.IntFlag, 'MsgFlag', 'socket',
+                lambda C: C.isupper() and C.startswith('MSG_'),
+                source=_socket,
+                )
+        enum._test_simple_enum(CheckedMsgFlag, socket.MsgFlag)
+
+    def test_addressinfo_enum(self):
+        import _socket, enum
+        CheckedAddressInfo = enum._old_convert_(
+                enum.IntFlag, 'AddressInfo', 'socket',
+                lambda C: C.isupper() and C.startswith('AI_'),
+                source=_socket)
+        enum._test_simple_enum(CheckedAddressInfo, socket.AddressInfo)
+
 
 @unittest.skipUnless(HAVE_SOCKET_CAN, 'SocketCan required for this test.')
 class BasicCANTest(unittest.TestCase):
@@ -2050,7 +2085,6 @@ class CANTest(ThreadedCANSocketTest):
         cf, addr = self.s.recvfrom(self.bufsize)
         self.assertEqual(self.cf, cf)
         self.assertEqual(addr[0], self.interface)
-        self.assertEqual(addr[1], socket.AF_CAN)
 
     def _testSendFrame(self):
         self.cf = self.build_can_frame(0x00, b'\x01\x02\x03\x04\x05')
@@ -5591,7 +5625,7 @@ def isTipcAvailable():
     if not hasattr(socket, "AF_TIPC"):
         return False
     try:
-        f = open("/proc/modules")
+        f = open("/proc/modules", encoding="utf-8")
     except (FileNotFoundError, IsADirectoryError, PermissionError):
         # It's ok if the file does not exist, is a directory or if we
         # have not the permission to read it.
@@ -6188,7 +6222,7 @@ class SendfileUsingSendTest(ThreadedTCPSocketTest):
                 meth = self.meth_from_sock(s)
                 self.assertRaisesRegex(
                     ValueError, "SOCK_STREAM", meth, file)
-        with open(os_helper.TESTFN, 'rt') as file:
+        with open(os_helper.TESTFN, encoding="utf-8") as file:
             with socket.socket() as s:
                 meth = self.meth_from_sock(s)
                 self.assertRaisesRegex(

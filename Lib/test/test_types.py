@@ -671,8 +671,8 @@ class TypesTests(unittest.TestCase):
         ForwardBefore = 'Forward' | T
         def forward_after(x: ForwardAfter[int]) -> None: ...
         def forward_before(x: ForwardBefore[int]) -> None: ...
-        assert typing.get_args(typing.get_type_hints(forward_after, localns=locals())['x']) == (int, Forward)
-        assert typing.get_args(typing.get_type_hints(forward_before, localns=locals())['x']) == (int, Forward)
+        assert typing.get_args(typing.get_type_hints(forward_after)['x']) == (int, Forward)
+        assert typing.get_args(typing.get_type_hints(forward_before)['x']) == (int, Forward)
 
     def test_or_type_operator_with_Protocol(self):
         class Proto(typing.Protocol):
@@ -736,6 +736,16 @@ class TypesTests(unittest.TestCase):
         # Comparison should fail and errors should propagate out for bad types.
         with self.assertRaises(ZeroDivisionError):
             list[int] | list[bt]
+
+        union_ga = (int | list[str], int | collections.abc.Callable[..., str],
+                    int | d)
+        # Raise error when isinstance(type, type | genericalias)
+        for type_ in union_ga:
+            with self.subTest(f"check isinstance/issubclass is invalid for {type_}"):
+                with self.assertRaises(TypeError):
+                    isinstance(list, type_)
+                with self.assertRaises(TypeError):
+                    issubclass(list, type_)
 
     def test_ellipsis_type(self):
         self.assertIsInstance(Ellipsis, types.EllipsisType)
